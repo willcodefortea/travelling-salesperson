@@ -20,11 +20,15 @@ class Trip {
   calculateDistance(
     distanceOperator: DistanceOperator = euclideanDistance
   ): number {
+    const lastStopDistance = distanceOperator(
+      this.cities[0],
+      this.cities[this.cities.length - 1]
+    );
     return this.cities.slice(0, -1).reduce((acc, city, idx) => {
       const nextCity = this.cities[idx + 1];
       const distance = distanceOperator(city, nextCity);
       return acc + distance;
-    }, 0);
+    }, lastStopDistance);
   }
 
   objectiveFunction() {
