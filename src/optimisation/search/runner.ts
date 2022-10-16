@@ -11,7 +11,8 @@ class Runner {
     construction = RandomConstruction,
     shouldStop: StoppingCriterion,
     move: Move,
-    initialSolution?: Solution
+    initialSolution?: Solution,
+    callback: (solution: Solution) => void = () => {}
   ) {
     const emptySolution = Solution.default(cities);
     let bestSolution = initialSolution || construction.apply(emptySolution);
@@ -20,6 +21,7 @@ class Runner {
       const candidateSolution = move.apply(bestSolution);
       if (candidateSolution.cost() < bestSolution.cost()) {
         bestSolution = candidateSolution;
+        callback(bestSolution);
       }
     }
 
