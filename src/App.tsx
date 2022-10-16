@@ -1,18 +1,14 @@
 import React, { useState } from "react";
-import CytoscapeComponent from "react-cytoscapejs";
-import City from "./optimisation/entities/city";
+import Graph from "./Graph";
+import Trip from "./optimisation/entities/trip";
 import { ATT_48_CITIES, BEST_TOUR } from "./optimisation/resources/att48";
-import minimumSpanningTree from "./optimisation/search/construction/minimumSpanningTree";
-import RandomConstruction from "./optimisation/search/construction/random";
-import moveCity from "./optimisation/search/moves/moveCity";
-import randomMover from "./optimisation/search/moves/randomMover";
-import swapTwo from "./optimisation/search/moves/swapTwo";
-import Runner from "./optimisation/search/runner";
 import Solution from "./optimisation/search/solution";
-import {
-  fixedIteration,
-  fixedTime,
-} from "./optimisation/search/stoppingCriterion";
+
+import WebWorker from "./worker?worker";
+import { buildMessageSender } from "./worker";
+
+const worker = new WebWorker();
+const sendWorkerMessage = buildMessageSender(worker);
 
 const BEST_SOLUTION = Solution.default(
   BEST_TOUR.map((idx) => ATT_48_CITIES[idx - 1])
@@ -47,83 +43,78 @@ const App = () => {
   );
   const [solution, setSolution] = useState(BEST_SOLUTION);
 
-  const getKey = (city: City) => `city-${city.x}-${city.y}`;
-
-  const nodes = solution.trip.cities.map((city, idx) => ({
-    data: { id: getKey(city), label: idx.toString() },
-    position: { x: city.x / 5, y: (city.y * -1) / 5 },
-  }));
-
-  const edges = solution.trip.cities.map((_, idx) => ({
-    data: {
-      source: getKey(solution.trip.cities[idx]),
-      target: getKey(
-        solution.trip.cities[(idx + 1) % solution.trip.cities.length]
-      ),
+  worker.addEventListener(
+    "message",
+    (message) => {
+      switch (message.data.type) {
+        case "STOPPING": {
+          setOptimizerState("IDLE");
+        }
+        case "SOLUTION": {
+          setSolution(
+            new Solution(
+              message.data.solution.cities,
+              new Trip(message.data.solution.trip.cities)
+            )
+          );
+          return;
+        }
+      }
     },
-  }));
+    { once: true }
+  );
 
-  const elements = [...nodes, ...edges];
-
-  const layout = {
-    name: "preset",
-    padding: 50,
+  const generateRandomSolution = () => {
+    sendWorkerMessage.setSolution({ solution: undefined });
+    sendWorkerMessage.configure({
+      construction: "random",
+      move: "random",
+      numIterations: 1,
+      singleLoop: true,
+    });
+    sendWorkerMessage.start();
   };
 
-  const bulkMoveHandler = async () => {
-    const runner = new Runner();
-    const initialSolution = solution === BEST_SOLUTION ? undefined : solution;
-    setOptimizerState("WORKING");
-
-    return new Promise<Solution>((resolve) => {
-      const newSolution = runner.run(
-        ATT_48_CITIES,
-        RandomConstruction,
-        fixedIteration(1000),
-        moveCity,
-        initialSolution
-      );
-      setSolution(newSolution);
+  const bulkMoveHandler = () => {
+    if (optimizerState === "IDLE") {
+      setOptimizerState("WORKING");
+      sendWorkerMessage.setSolution({
+        solution: solution === BEST_SOLUTION ? undefined : solution,
+      });
+      sendWorkerMessage.configure({
+        construction: "random",
+        move: "moveCity",
+        numIterations: 1000,
+        singleLoop: false,
+      });
+      sendWorkerMessage.start();
+    } else {
       setOptimizerState("IDLE");
-    });
+      sendWorkerMessage.stop();
+    }
   };
 
   const singleMoveHandler = async () => {
-    const runner = new Runner();
-    const initialSolution = solution === BEST_SOLUTION ? undefined : solution;
-    setOptimizerState("WORKING");
-
-    return new Promise<Solution>((resolve) => {
-      const newSolution = runner.run(
-        ATT_48_CITIES,
-        RandomConstruction,
-        fixedIteration(1),
-        moveCity,
-        initialSolution
-      );
-      setSolution(newSolution);
-      setOptimizerState("IDLE");
+    sendWorkerMessage.setSolution({
+      solution: solution === BEST_SOLUTION ? undefined : solution,
     });
+    sendWorkerMessage.configure({
+      construction: "random",
+      move: "moveCity",
+      numIterations: 1,
+      singleLoop: true,
+    });
+    sendWorkerMessage.start();
   };
 
   return (
     <div>
-      <CytoscapeComponent
-        autolock={true}
-        elements={elements}
-        layout={layout}
-        minZoom={0.1}
-        maxZoom={3}
-        style={{ width: "100%", height: "600px" }}
-      />
+      <Graph solution={solution} />
       <div className="controls">
         {config.singleMoveEnabled && (
           <>
-            <button
-              disabled={optimizerState === "WORKING"}
-              onClick={bulkMoveHandler}
-            >
-              1000 Moves
+            <button onClick={bulkMoveHandler}>
+              {optimizerState === "WORKING" ? "Stop" : "Start single"}
             </button>
             <button
               disabled={optimizerState === "WORKING"}
@@ -136,16 +127,7 @@ const App = () => {
         {config.randomEnabled && (
           <button
             disabled={optimizerState === "WORKING"}
-            onClick={() => {
-              const runner = new Runner();
-              const newSolution = runner.run(
-                ATT_48_CITIES,
-                RandomConstruction,
-                fixedIteration(1),
-                RandomConstruction
-              );
-              setSolution(newSolution);
-            }}
+            onClick={generateRandomSolution}
           >
             Randomise
           </button>
