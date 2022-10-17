@@ -5,11 +5,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predeploy": "npm run build",
+    "cname": "echo tsp.willcodefortea.com > dist/CNAME",
     "deploy": "gh-pages -d dist",
     "dev": "vite",
     "build": "tsc && vite build",
     "test:watch": "jest --watch",
+    "predeploy": "npm run build && npm run cname",
     "preview": "vite preview"
   },
   "dependencies": {
