@@ -6,17 +6,22 @@ import Solution from "./optimisation/search/solution";
 
 import WebWorker from "./worker?worker";
 import { buildMessageSender } from "./worker";
+import RandomButton from "./randomButton";
+import SingleMoveButton from "./singleMoveButton";
+import StartSingleMoveButton from "./startSingleMoveButton";
+import StartNeighbourhoodMoveButton from "./startNeighbourhoodSearchButton";
 
 const worker = new WebWorker();
 const sendWorkerMessage = buildMessageSender(worker);
 
-const BEST_SOLUTION = Solution.default(
+export const BEST_SOLUTION = Solution.default(
   BEST_TOUR.map((idx) => ATT_48_CITIES[idx - 1])
 );
 
 interface TspConfig {
   randomEnabled: boolean;
   singleMoveEnabled: boolean;
+  neighbourHoodEnabled: boolean;
 }
 
 declare global {
@@ -29,6 +34,7 @@ const useConfig = (): TspConfig => {
   const defaultConfig: TspConfig = {
     randomEnabled: false,
     singleMoveEnabled: false,
+    neighbourHoodEnabled: false,
   };
   return {
     ...defaultConfig,
@@ -36,27 +42,28 @@ const useConfig = (): TspConfig => {
   };
 };
 
+export type OptimizerState = "WORKING" | "IDLE";
+
 const App = () => {
   const config = useConfig();
-  const [optimizerState, setOptimizerState] = useState<"WORKING" | "IDLE">(
-    "IDLE"
-  );
+  const [optimizerState, setOptimizerState] = useState<OptimizerState>("IDLE");
+
   const [solution, setSolution] = useState(BEST_SOLUTION);
 
   worker.addEventListener(
     "message",
     (message) => {
+      console.log(message.data);
       switch (message.data.type) {
         case "STOPPING": {
           setOptimizerState("IDLE");
         }
         case "SOLUTION": {
-          setSolution(
-            new Solution(
-              message.data.solution.cities,
-              new Trip(message.data.solution.trip.cities)
-            )
+          const newSolution = new Solution(
+            message.data.solution.cities,
+            new Trip(message.data.solution.trip.cities)
           );
+          setSolution(newSolution);
           return;
         }
       }
@@ -64,73 +71,38 @@ const App = () => {
     { once: true }
   );
 
-  const generateRandomSolution = () => {
-    sendWorkerMessage.setSolution({ solution: undefined });
-    sendWorkerMessage.configure({
-      construction: "random",
-      move: "random",
-      numIterations: 1,
-      singleLoop: true,
-    });
-    sendWorkerMessage.start();
-  };
-
-  const bulkMoveHandler = () => {
-    if (optimizerState === "IDLE") {
-      setOptimizerState("WORKING");
-      sendWorkerMessage.setSolution({
-        solution: solution === BEST_SOLUTION ? undefined : solution,
-      });
-      sendWorkerMessage.configure({
-        construction: "random",
-        move: "moveCity",
-        numIterations: 1000,
-        singleLoop: false,
-      });
-      sendWorkerMessage.start();
-    } else {
-      setOptimizerState("IDLE");
-      sendWorkerMessage.stop();
-    }
-  };
-
-  const singleMoveHandler = async () => {
-    sendWorkerMessage.setSolution({
-      solution: solution === BEST_SOLUTION ? undefined : solution,
-    });
-    sendWorkerMessage.configure({
-      construction: "random",
-      move: "moveCity",
-      numIterations: 1,
-      singleLoop: true,
-    });
-    sendWorkerMessage.start();
-  };
-
   return (
     <div>
       <Graph solution={solution} />
       <div className="controls">
+        {config.neighbourHoodEnabled && (
+          <StartNeighbourhoodMoveButton
+            state={optimizerState}
+            sendWorkerMessage={sendWorkerMessage}
+            solution={solution}
+            setOptimizerState={setOptimizerState}
+          />
+        )}
         {config.singleMoveEnabled && (
           <>
-            <button onClick={bulkMoveHandler}>
-              {optimizerState === "WORKING" ? "Stop" : "Start single"}
-            </button>
-            <button
-              disabled={optimizerState === "WORKING"}
-              onClick={singleMoveHandler}
-            >
-              Single Move
-            </button>
+            <StartSingleMoveButton
+              state={optimizerState}
+              sendWorkerMessage={sendWorkerMessage}
+              solution={solution}
+              setOptimizerState={setOptimizerState}
+            />
+            <SingleMoveButton
+              state={optimizerState}
+              sendWorkerMessage={sendWorkerMessage}
+              solution={solution}
+            />
           </>
         )}
         {config.randomEnabled && (
-          <button
-            disabled={optimizerState === "WORKING"}
-            onClick={generateRandomSolution}
-          >
-            Randomise
-          </button>
+          <RandomButton
+            state={optimizerState}
+            sendWorkerMessage={sendWorkerMessage}
+          />
         )}
         <button
           onClick={() => {

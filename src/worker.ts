@@ -2,7 +2,9 @@ import Trip from "./optimisation/entities/trip";
 import { ATT_48_CITIES } from "./optimisation/resources/att48";
 import RandomConstruction from "./optimisation/search/construction/random";
 import moveCity from "./optimisation/search/moves/moveCity";
+import moveCityToBest from "./optimisation/search/moves/moveCityToBest";
 import randomMover from "./optimisation/search/moves/randomMover";
+import NeighbourhoodRunner from "./optimisation/search/neighbourhoodRunner";
 import Runner from "./optimisation/search/runner";
 import Solution from "./optimisation/search/solution";
 import {
@@ -14,10 +16,16 @@ const CONSTRUCTION = {
   random: RandomConstruction,
 };
 
+const RUNNERS = {
+  hillClimbing: Runner,
+  neighbourHood: NeighbourhoodRunner,
+};
+
 const MOVES = {
   random: RandomConstruction,
   randomMover,
   moveCity,
+  moveCityToBest,
 };
 
 type WORKER_STATE = "RUNNING" | "IDLE";
@@ -43,6 +51,7 @@ interface ConfigureMessage {
   numIterations?: number;
   timeout?: number;
   debug?: boolean;
+  runner?: keyof typeof RUNNERS;
 }
 
 type Message =
@@ -82,19 +91,23 @@ let config = {
   stoppingCriterion: () => fixedTime(LOOP_TIMEOUT * 0.9),
   mover: MOVES.randomMover,
   debug: false,
+  runner: Runner,
 };
 
 let noChangeCount = 0;
-const NO_CHANGE_LIMIT = 100;
+const NO_CHANGE_LIMIT = 10;
 
 const loop = () => {
   if (worker_state === "IDLE") return;
 
-  const finalSolution = new Runner().run(
+  // TODO: broadcast the final solution?
+  const finalSolution = new config.runner().run(
     config.cities,
-    config.construction,
-    config.stoppingCriterion(),
-    config.mover,
+    {
+      construction: config.construction,
+      stoppingCriterion: config.stoppingCriterion(),
+      move: config.mover,
+    },
     solution,
     (newSolution) => {
       solution = newSolution;
@@ -137,7 +150,15 @@ const onmessage = (e: MessageEvent<Message>) => {
     }
     case "CONFIGURE": {
       const {
-        data: { construction, move, numIterations, timeout, singleLoop, debug },
+        data: {
+          construction,
+          move,
+          numIterations,
+          timeout,
+          singleLoop,
+          debug,
+          runner,
+        },
       } = e;
       if (construction) config.construction = CONSTRUCTION[construction];
       if (move) config.mover = MOVES[move];
@@ -146,6 +167,7 @@ const onmessage = (e: MessageEvent<Message>) => {
       if (timeout) config.stoppingCriterion = () => fixedTime(timeout);
       if (singleLoop !== undefined) config.singleLoop = singleLoop;
       if (debug !== undefined) config.debug = debug;
+      if (runner !== undefined) config.runner = RUNNERS[runner];
       return;
     }
     default: {
