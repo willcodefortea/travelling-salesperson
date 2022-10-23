@@ -1,14 +1,27 @@
-export type StoppingCriterion = () => boolean;
-
-export const fixedIteration = (numIterations: number) => {
-  let iterationCount = 0;
-
-  return () => numIterations === iterationCount++;
+export type StoppingCriterion = {
+  shouldStop: () => boolean;
+  percentageProgress: () => number;
 };
 
-export const fixedTime = (timeLimit: number, clock = () => new Date()) => {
+export const fixedIteration = (numIterations: number): StoppingCriterion => {
+  let iterationCount = 0;
+  return {
+    shouldStop: () => numIterations === iterationCount++,
+    percentageProgress: () => iterationCount / numIterations,
+  };
+};
+
+export const fixedTime = (
+  timeLimit: number,
+  clock = () => new Date()
+): StoppingCriterion => {
   const endTime = clock();
   endTime.setSeconds(endTime.getSeconds() + timeLimit);
+  const startTime = clock().getTime();
 
-  return () => clock() >= endTime;
+  return {
+    shouldStop: () => clock() >= endTime,
+    percentageProgress: () =>
+      (clock().getTime() - startTime) / (endTime.getTime() - startTime),
+  };
 };

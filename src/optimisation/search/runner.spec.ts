@@ -5,10 +5,9 @@ import { fixedIteration } from "./stoppingCriterion";
 
 test("runner actually works", () => {
   const runner = new Runner();
-  runner.run(
-    ATT_48_CITIES,
-    RandomConstruction,
-    fixedIteration(0),
-    RandomConstruction
-  );
+  runner.run(ATT_48_CITIES, {
+    construction: RandomConstruction,
+    move: RandomConstruction,
+    stoppingCriterion: fixedIteration(0),
+  });
 });

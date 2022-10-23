@@ -19,6 +19,15 @@ class Solution {
     return new Solution(this.cities, trip);
   }
 
+  withNewPath(cities: City[]): Solution {
+    const trip = new Trip(cities);
+    return new Solution(this.cities, trip);
+  }
+
+  getPath(): City[] {
+    return [...this.trip.cities];
+  }
+
   cost() {
     return this.trip.objectiveFunction();
   }
@@ -26,6 +35,16 @@ class Solution {
   swap(a: number, b: number): Solution {
     const tripCities = [...this.trip.cities];
     [tripCities[b], tripCities[a]] = [tripCities[a], tripCities[b]];
+    const trip = new Trip(tripCities);
+    return new Solution(this.cities, trip);
+  }
+
+  twoOptSwap(a: number, b: number): Solution {
+    const tripCities = [
+      ...this.trip.cities.slice(0, a),
+      ...this.trip.cities.slice(a, b).reverse(),
+      ...this.trip.cities.slice(b),
+    ];
     const trip = new Trip(tripCities);
     return new Solution(this.cities, trip);
   }
